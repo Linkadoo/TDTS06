@@ -1,0 +1,117 @@
+No.     Time           Source                Destination           Protocol Length Info
+     15 3.123853000    130.236.245.176       128.119.245.12        HTTP     385    GET /wireshark-labs/HTTP-wireshark-file2.html HTTP/1.1 
+
+Frame 15: 385 bytes on wire (3080 bits), 385 bytes captured (3080 bits) on interface 0
+Ethernet II, Src: Hewlett-_bc:f4:83 (78:ac:c0:bc:f4:83), Dst: Cisco_72:63:80 (e0:5f:b9:72:63:80)
+Internet Protocol Version 4, Src: 130.236.245.176 (130.236.245.176), Dst: 128.119.245.12 (128.119.245.12)
+Transmission Control Protocol, Src Port: 52612 (52612), Dst Port: 80 (80), Seq: 1, Ack: 1, Len: 331
+Hypertext Transfer Protocol
+    GET /wireshark-labs/HTTP-wireshark-file2.html HTTP/1.1\r\n
+        [Expert Info (Chat/Sequence): GET /wireshark-labs/HTTP-wireshark-file2.html HTTP/1.1\r\n]
+        Request Method: GET
+        Request URI: /wireshark-labs/HTTP-wireshark-file2.html
+        Request Version: HTTP/1.1
+    Host: gaia.cs.umass.edu\r\n
+    User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:46.0) Gecko/20100101 Firefox/46.0\r\n
+    Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n
+    Accept-Language: en-US,en;q=0.5\r\n
+    Accept-Encoding: gzip, deflate\r\n
+    Connection: keep-alive\r\n
+    \r\n
+    [Full request URI: http://gaia.cs.umass.edu/wireshark-labs/HTTP-wireshark-file2.html]
+    [HTTP request 1/2]
+    [Response in frame: 17]
+    [Next request in frame: 30]
+
+No.     Time           Source                Destination           Protocol Length Info
+     17 3.241045000    128.119.245.12        130.236.245.176       HTTP     786    HTTP/1.1 200 OK  (text/html)
+
+Frame 17: 786 bytes on wire (6288 bits), 786 bytes captured (6288 bits) on interface 0
+Ethernet II, Src: Cisco_72:63:80 (e0:5f:b9:72:63:80), Dst: Hewlett-_bc:f4:83 (78:ac:c0:bc:f4:83)
+Internet Protocol Version 4, Src: 128.119.245.12 (128.119.245.12), Dst: 130.236.245.176 (130.236.245.176)
+Transmission Control Protocol, Src Port: 80 (80), Dst Port: 52612 (52612), Seq: 1, Ack: 332, Len: 732
+Hypertext Transfer Protocol
+    HTTP/1.1 200 OK\r\n
+        [Expert Info (Chat/Sequence): HTTP/1.1 200 OK\r\n]
+        Request Version: HTTP/1.1
+        Status Code: 200
+        Response Phrase: OK
+    Date: Fri, 02 Sep 2016 13:51:58 GMT\r\n
+    Server: Apache/2.4.6 (CentOS) OpenSSL/1.0.1e-fips PHP/5.4.16 mod_perl/2.0.9dev Perl/v5.16.3\r\n
+    Last-Modified: Fri, 02 Sep 2016 05:59:01 GMT\r\n
+    ETag: "173-53b8006eb7f09"\r\n
+    Accept-Ranges: bytes\r\n
+    Content-Length: 371\r\n
+    Keep-Alive: timeout=5, max=100\r\n
+    Connection: Keep-Alive\r\n
+    Content-Type: text/html; charset=UTF-8\r\n
+    \r\n
+    [HTTP response 1/2]
+    [Time since request: 0.117192000 seconds]
+    [Request in frame: 15]
+    [Next request in frame: 30]
+    [Next response in frame: 34]
+Line-based text data: text/html
+    \n
+    <html>\n
+    \n
+    Congratulations again!  Now you've downloaded the file lab2-2.html. <br>\n
+    This file's last modification date will not change.  <p>\n
+    Thus  if you download this multiple times on your browser, a complete copy <br>\n
+    will only be sent once by the server due to the inclusion of the IN-MODIFIED-SINCE<br>\n
+    field in your browser's HTTP GET request to the server.\n
+    \n
+    </html>\n
+
+No.     Time           Source                Destination           Protocol Length Info
+     30 5.156204000    130.236.245.176       128.119.245.12        HTTP     497    GET /wireshark-labs/HTTP-wireshark-file2.html HTTP/1.1 
+
+Frame 30: 497 bytes on wire (3976 bits), 497 bytes captured (3976 bits) on interface 0
+Ethernet II, Src: Hewlett-_bc:f4:83 (78:ac:c0:bc:f4:83), Dst: Cisco_72:63:80 (e0:5f:b9:72:63:80)
+Internet Protocol Version 4, Src: 130.236.245.176 (130.236.245.176), Dst: 128.119.245.12 (128.119.245.12)
+Transmission Control Protocol, Src Port: 52612 (52612), Dst Port: 80 (80), Seq: 332, Ack: 733, Len: 443
+Hypertext Transfer Protocol
+    GET /wireshark-labs/HTTP-wireshark-file2.html HTTP/1.1\r\n
+        [Expert Info (Chat/Sequence): GET /wireshark-labs/HTTP-wireshark-file2.html HTTP/1.1\r\n]
+        Request Method: GET
+        Request URI: /wireshark-labs/HTTP-wireshark-file2.html
+        Request Version: HTTP/1.1
+    Host: gaia.cs.umass.edu\r\n
+    User-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:46.0) Gecko/20100101 Firefox/46.0\r\n
+    Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\r\n
+    Accept-Language: en-US,en;q=0.5\r\n
+    Accept-Encoding: gzip, deflate\r\n
+    Connection: keep-alive\r\n
+    If-Modified-Since: Fri, 02 Sep 2016 05:59:01 GMT\r\n
+    If-None-Match: "173-53b8006eb7f09"\r\n
+    Cache-Control: max-age=0\r\n
+    \r\n
+    [Full request URI: http://gaia.cs.umass.edu/wireshark-labs/HTTP-wireshark-file2.html]
+    [HTTP request 2/2]
+    [Prev request in frame: 15]
+    [Response in frame: 34]
+
+No.     Time           Source                Destination           Protocol Length Info
+     34 5.273261000    128.119.245.12        130.236.245.176       HTTP     295    HTTP/1.1 304 Not Modified 
+
+Frame 34: 295 bytes on wire (2360 bits), 295 bytes captured (2360 bits) on interface 0
+Ethernet II, Src: Cisco_72:63:80 (e0:5f:b9:72:63:80), Dst: Hewlett-_bc:f4:83 (78:ac:c0:bc:f4:83)
+Internet Protocol Version 4, Src: 128.119.245.12 (128.119.245.12), Dst: 130.236.245.176 (130.236.245.176)
+Transmission Control Protocol, Src Port: 80 (80), Dst Port: 52612 (52612), Seq: 733, Ack: 775, Len: 241
+Hypertext Transfer Protocol
+    HTTP/1.1 304 Not Modified\r\n
+        [Expert Info (Chat/Sequence): HTTP/1.1 304 Not Modified\r\n]
+        Request Version: HTTP/1.1
+        Status Code: 304
+        Response Phrase: Not Modified
+    Date: Fri, 02 Sep 2016 13:52:00 GMT\r\n
+    Server: Apache/2.4.6 (CentOS) OpenSSL/1.0.1e-fips PHP/5.4.16 mod_perl/2.0.9dev Perl/v5.16.3\r\n
+    Connection: Keep-Alive\r\n
+    Keep-Alive: timeout=5, max=99\r\n
+    ETag: "173-53b8006eb7f09"\r\n
+    \r\n
+    [HTTP response 2/2]
+    [Time since request: 0.117057000 seconds]
+    [Prev request in frame: 15]
+    [Prev response in frame: 17]
+    [Request in frame: 30]
