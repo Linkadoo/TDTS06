@@ -17,14 +17,15 @@
 #endif
 
 #define MAX_QUEUE_SIZE 10
-#define MAXDATASIZE 100		
+#define MAXDATASIZE 1000
 
-class server_side
+class internal_side
 {
 	int sock;  // socket handle
 	int new_sock;	//socket for connection
 	int addr_status;
 	int yes=1;
+    char recv_buf[MAXDATASIZE]; //Buffer for incoming messages
 	struct addrinfo hints;
 	struct addrinfo* resp;
 	struct addrinfo* p;
@@ -55,12 +56,7 @@ class server_side
 	    return &(((struct sockaddr_in6*)sa)->sin6_addr);
 	}
 
-public:
-	void setPort(char* port){
-		cport = port;
-		printf("%s \n", cport);
-	}
-
+	public:
 	void accept_connection(){
 		while(true){
 			printf("inside\n");
@@ -76,9 +72,10 @@ public:
 
 			if(!fork()){
 				close(sock);
-				if(send(new_sock, "MEDDELANDE", 10, 0) == -1){
-					perror("send");
-				}
+
+				recv(new_sock, recv_buf, MAXDATASIZE-1, 0);	//TODO: implement received buffer and process http get request.
+				fprintf(stderr,"%s \n", recv_buf);			// Forward get request to external side.
+
 				close(new_sock);
 				exit(0);
 			}
@@ -86,8 +83,14 @@ public:
 		}
 	}
 	
+	//	Receive http request from client and forward to external side
+	char* recv_request(){
+
+	}
+
 	/* Method used to initialize the listening socket. */
-	void init_socket(){
+	void init_socket(char* port){
+		cport = port;
 		//Define the socket type etc.
 		memset(&hints, 0, sizeof hints);
 		hints.ai_family = AF_UNSPEC;
@@ -100,7 +103,8 @@ public:
 			exit(1);
 		}
 
-		//Loop through server_side addrinfo response
+
+		//Loop through internal_side addrinfo response
 		for(p=resp; p!=NULL; p=p->ai_next){
 			if((sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
 				perror("server: socket");
@@ -133,19 +137,19 @@ public:
 		}
 
 		//WHAT HAPPENS HERE?
-		sa.sa_handler = sigchld_handler; // reap all dead processes
+		/*sa.sa_handler = sigchld_handler; // reap all dead processes
 		sigemptyset(&sa.sa_mask);
 		sa.sa_flags = SA_RESTART;
 		if (sigaction(SIGCHLD, &sa, NULL) == -1) {
 			perror("sigaction");
 			exit(1);
-		}
+		}*/
 
 		printf("server: waiting for connections...\n");
 	}
 };
 
-class client_side
+class external_side
 {	
 	int sock;	//Handle to socket
 	int numbytes; //   
@@ -155,8 +159,8 @@ class client_side
     struct addrinfo* p; //
     int addr_status;
     char s[INET6_ADDRSTRLEN];
-    char* hostname;
-    char* port = "80";
+    char* _hostname;
+    char* port = "6766";
     
 	public:
 	// get sockaddr, IPv4 or IPv6:
@@ -169,19 +173,20 @@ class client_side
     	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 	}
 	
-	void init_socket(){
+	void init_socket(char* hostname){
+		_hostname=hostname;
 		//Define the socket type etc.
 		memset(&hints, 0, sizeof hints);
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_STREAM;
 
-		addr_status = getaddrinfo(hostname, port, &hints, &resp);
+		addr_status = getaddrinfo(_hostname, port, &hints, &resp);
 		if (addr_status != 0) {
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(addr_status));
 			exit(1);
 		}
 
-		//Loop through server_side addrinfo response
+		//Loop through internal_side addrinfo response
 		for(p=resp; p!=NULL; p=p->ai_next){
 			if((sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
 				perror("client: socket");
@@ -203,10 +208,13 @@ class client_side
 
 		inet_ntop(p->ai_family, get_in_addr((struct sockaddr*) p->ai_addr), s, sizeof(s));
 		printf("client: connecting to %s\n", s);
-		
+
 		freeaddrinfo(resp); // all done with this structure
 
-    	if ((numbytes = recv(sock, buf, MAXDATASIZE-1, 0)) == -1) {
+		numbytes = recv(sock, buf, MAXDATASIZE-1, 0);
+		fprintf(stderr, "numbytes: %d \n", numbytes);
+
+		if (numbytes == -1) {
         	perror("recv");
         	exit(1);
     	}
@@ -222,22 +230,20 @@ class client_side
 class proxy
 {
 	public:
-	server_side* server;
-	client_side* client;
+	internal_side* internal;
+	external_side* external;
 
 
 	proxy(){
-		server = new server_side();
-		client = new client_side();
+		internal = new internal_side();
+		external = new external_side();
 	}
 	void init(char* c_port, char* hostname){
-		server->setPort(c_port);
-		server->init_socket();
-		client->init_socket();
-
+		internal->init_socket(c_port);
+		//external->init_socket(hostname);
 	}
 	void run(){
-		server->accept_connection();
+		internal->accept_connection();
 	}
 };
 
