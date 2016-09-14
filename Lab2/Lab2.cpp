@@ -11,42 +11,23 @@
 #else
 #include <sys/socket.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #endif
-
-/*
-struct sockaddr {
- unsigned short sa_family; // address family, AF_xxx
- char sa_data[14]; // 14 bytes of protocol address
-};
-*/
-
-
-/*
-struct addrinfo {
- int ai_flags; // AI_PASSIVE, AI_CANONNAME, etc.
- int ai_family; // AF_INET, AF_INET6, AF_UNSPEC
- int ai_socktype; // SOCK_STREAM, SOCK_DGRAM
- int ai_protocol; // use 0 for "any"
- size_t ai_addrlen; // size of ai_addr in bytes
- struct sockaddr *ai_addr; // struct sockaddr_in or _in6
- char *ai_canonname; // full canonical hostname
- struct addrinfo *ai_next; // linked list, next node
-};
-*/
 
 class server_side
 {
 	int sock;  // socket handle
 	struct addrinfo hints;
-	struct addrinfo resp;
+	struct addrinfo* resp;
     struct sockaddr their_addr; // connector's address information
 	int addr_status;
-	int cport;
+	char* cport;
 	
 	public:
-	void setPort(int port){
+	void setPort(char* port){
 		cport = port;
-		printf("%d", cport);
+		printf("%s \n", cport);
 	}
 	void init_socket(){
 		//Define the socket type etc.
@@ -55,7 +36,8 @@ class server_side
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE; // use my IP
 		
-		addr_status = getaddrinfo(NULL, cport, &hints, &resp)
+		addr_status = getaddrinfo(NULL, cport, &hints, &resp);
+		printf("getaddrinfo: %d\n", (addr_status));
 		if (addr_status != 0) {
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(addr_status));
 			exit(1);
@@ -70,19 +52,22 @@ class client_side
 
 class proxy
 {
-	server_side* server = new server_side();
-	client_side* client = new client_side();
+	server_side* server;
+	client_side* client;
 	
 	public:
-	proxy(int c_port){
+	proxy(char* c_port){
+		server = new server_side();
+		client = new client_side();
+
 		server->setPort(c_port);
+		server->init_socket();
 	}
-	
-	
 };
 
 int main(int argc, char** argv)
 {
-	int CPORT = atoi(argv[1]);  // the port users will be connecting to
+	char* CPORT = argv[1];  // the port users will be connecting to
 	proxy* myProxy = new proxy(CPORT);
+	return 1;
 }
