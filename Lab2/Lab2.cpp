@@ -17,6 +17,7 @@
 #endif
 
 #define MAX_QUEUE_SIZE 10
+#define MAXDATASIZE 100		
 
 class server_side
 {
@@ -84,7 +85,8 @@ public:
 			close(new_sock);
 		}
 	}
-
+	
+	/* Method used to initialize the listening socket. */
 	void init_socket(){
 		//Define the socket type etc.
 		memset(&hints, 0, sizeof hints);
@@ -129,7 +131,7 @@ public:
 			perror("listen");
 			exit(1);
 		}
-		printf("P's address: %d",p);
+
 		//WHAT HAPPENS HERE?
 		sa.sa_handler = sigchld_handler; // reap all dead processes
 		sigemptyset(&sa.sa_mask);
@@ -144,8 +146,77 @@ public:
 };
 
 class client_side
-{
+{	
+	int sock;	//Handle to socket
+	int numbytes; //   
+    char buf[MAXDATASIZE]; //Buffer for incoming messages
+    struct addrinfo hints;	
+    struct addrinfo* resp;
+    struct addrinfo* p; //
+    int addr_status;
+    char s[INET6_ADDRSTRLEN];
+    char* hostname;
+    char* port = "80";
+    
+	public:
+	// get sockaddr, IPv4 or IPv6:
+	void *get_in_addr(struct sockaddr *sa)
+	{
+    	if (sa->sa_family == AF_INET) {
+    	    return &(((struct sockaddr_in*)sa)->sin_addr);
+   		}
 
+    	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+	}
+	
+	void init_socket(){
+		//Define the socket type etc.
+		memset(&hints, 0, sizeof hints);
+		hints.ai_family = AF_UNSPEC;
+		hints.ai_socktype = SOCK_STREAM;
+
+		addr_status = getaddrinfo(hostname, port, &hints, &resp);
+		if (addr_status != 0) {
+			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(addr_status));
+			exit(1);
+		}
+
+		//Loop through server_side addrinfo response
+		for(p=resp; p!=NULL; p=p->ai_next){
+			if((sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1){
+				perror("client: socket");
+				continue;
+			}
+
+			if(connect(sock, p->ai_addr, p->ai_addrlen) == -1){
+				close(sock);
+				perror("client: connect");
+				continue;
+			}
+			break;
+		}
+
+		if(p==NULL){
+			fprintf(stderr, "client: failed to connect\n");
+			exit(2);
+		}
+
+		inet_ntop(p->ai_family, get_in_addr((struct sockaddr*) p->ai_addr), s, sizeof(s));
+		printf("client: connecting to %s\n", s);
+		
+		freeaddrinfo(resp); // all done with this structure
+
+    	if ((numbytes = recv(sock, buf, MAXDATASIZE-1, 0)) == -1) {
+        	perror("recv");
+        	exit(1);
+    	}
+
+    	buf[numbytes] = '\0';
+
+    	printf("client: received '%s'\n",buf);
+
+    	close(sock);
+	}
 };
 
 class proxy
@@ -159,9 +230,11 @@ class proxy
 		server = new server_side();
 		client = new client_side();
 	}
-	void init(char* c_port){
+	void init(char* c_port, char* hostname){
 		server->setPort(c_port);
 		server->init_socket();
+		client->init_socket();
+
 	}
 	void run(){
 		server->accept_connection();
@@ -170,9 +243,14 @@ class proxy
 
 int main(int argc, char** argv)
 {
+	if (argc != 3) {
+        fprintf(stderr,"usage: %s port client_hostname\n",argv[0]);
+        exit(1);
+    }
 	char* CPORT = argv[1];  // the port users will be connecting to
+	char* host_name = argv[2]; // the ip to host
 	proxy* myProxy = new proxy();
-	myProxy->init(CPORT);
+	myProxy->init(CPORT,host_name);
 	myProxy->run();
 	return 1;
 }
