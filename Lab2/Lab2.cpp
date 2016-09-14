@@ -6,10 +6,11 @@
 #include <sys/types.h>
 
 #ifdef __WIN32__
-# include <winsock2.h>
+#include <winsock2.h>
 #include <ws2tcpip.h>
 #else
-# include <sys/socket.h>
+#include <sys/socket.h>
+#include <netdb.h>
 #endif
 
 /*
@@ -54,7 +55,8 @@ class server_side
 		hints.ai_socktype = SOCK_STREAM;
 		hints.ai_flags = AI_PASSIVE; // use my IP
 		
-		if ((addr_status = getaddrinfo(NULL, cport, &hints, &resp)) != 0) {
+		addr_status = getaddrinfo(NULL, cport, &hints, &resp)
+		if (addr_status != 0) {
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(addr_status));
 			exit(1);
 		}
