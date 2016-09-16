@@ -18,14 +18,18 @@
 
 #define MAX_QUEUE_SIZE 10
 #define MAXDATASIZE 1000
+class HTTP_parser
+{
+
+};
 
 class internal_side
 {
-	int sock;  // socket handle
-	int new_sock;	//socket for connection
+
+	int sock;  // socket handle for listening process
+	int connected_sock;	//socket for processes with a connection
+
 	int addr_status;
-	int yes=1;
-    char recv_buf[MAXDATASIZE]; //Buffer for incoming messages
 	struct addrinfo hints;
 	struct addrinfo* resp;
 	struct addrinfo* p;
@@ -47,7 +51,7 @@ class internal_side
 	}
 
 	// get sockaddr, IPv4 or IPv6:
-	void *get_in_addr(struct sockaddr *sa)
+	void *get_IP_addr(struct sockaddr *sa)
 	{
 	    if (sa->sa_family == AF_INET) {
 	        return &(((struct sockaddr_in*)sa)->sin_addr);
@@ -57,35 +61,42 @@ class internal_side
 	}
 
 	public:
-	void accept_connection(){
+	/* Used to probe for a message on the specified cport. When a connection is made
+	 * the main process keeps probing while the forked process returns with the
+	 * handle to a connection in connected_sock. */
+	void probe_and_fork_connection(){
 		while(true){
-			printf("inside\n");
 			sin_size = sizeof their_addr;
-			new_sock = accept(sock, (struct sockaddr*) &their_addr, &sin_size);
-			if(new_sock == -1){
+			connected_sock = accept(sock, (struct sockaddr*) &their_addr, &sin_size);
+			if(connected_sock == -1){
 				perror("accept");
 				continue;
 			}
-
-			inet_ntop(their_addr.sa_family, get_in_addr((struct sockaddr*) &their_addr), s, sizeof(s));
+			inet_ntop(their_addr.sa_family, get_IP_addr((struct sockaddr*) &their_addr), s, sizeof(s));
 			printf("server: got connection from %s\n", s);
 
 			if(!fork()){
+				//Close listening socket for the processes with a connection
 				close(sock);
-
-				recv(new_sock, recv_buf, MAXDATASIZE-1, 0);	//TODO: implement received buffer and process http get request.
-				fprintf(stderr,"%s \n", recv_buf);			// Forward get request to external side.
-
-				close(new_sock);
-				exit(0);
+				return;
 			}
-			close(new_sock);
+			close(connected_sock); // Close connected socket for
 		}
 	}
+
 	
 	//	Receive http request from client and forward to external side
-	char* recv_request(){
+	char *receive_request(){
+		char *request = new char[MAXDATASIZE];
+		recv(connected_sock, request, MAXDATASIZE-1, 0);	//TODO: implement received buffer and process http get request.
+		fprintf(stderr,"%s \n", request);			// Forward get request to external side.
 
+		return request;
+	}
+
+	void terminate_connection(){
+		close(connected_sock);
+		exit(0);
 	}
 
 	/* Method used to initialize the listening socket. */
@@ -110,7 +121,7 @@ class internal_side
 				perror("server: socket");
 				continue;
 			}
-
+			int yes = 1;
 			if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1){
 				perror("setsockopt");
 				exit(1);
@@ -136,14 +147,13 @@ class internal_side
 			exit(1);
 		}
 
-		//WHAT HAPPENS HERE?
-		/*sa.sa_handler = sigchld_handler; // reap all dead processes
+		sa.sa_handler = sigchld_handler; // reap all dead processes
 		sigemptyset(&sa.sa_mask);
 		sa.sa_flags = SA_RESTART;
 		if (sigaction(SIGCHLD, &sa, NULL) == -1) {
 			perror("sigaction");
 			exit(1);
-		}*/
+		}
 
 		printf("server: waiting for connections...\n");
 	}
@@ -151,6 +161,8 @@ class internal_side
 
 class external_side
 {	
+	HTTP_parser parser; //Parser to manipulate received HTTP's.
+
 	int sock;	//Handle to socket
 	int numbytes; //   
     char buf[MAXDATASIZE]; //Buffer for incoming messages
@@ -160,9 +172,12 @@ class external_side
     int addr_status;
     char s[INET6_ADDRSTRLEN];
     char* _hostname;
-    char* port = "6766";
+    char* port;
     
 	public:
+    external_side(){
+    	port = "80";
+    }
 	// get sockaddr, IPv4 or IPv6:
 	void *get_in_addr(struct sockaddr *sa)
 	{
@@ -172,9 +187,7 @@ class external_side
 
     	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 	}
-	
-	void init_socket(char* hostname){
-		_hostname=hostname;
+	void init_socket(){
 		//Define the socket type etc.
 		memset(&hints, 0, sizeof hints);
 		hints.ai_family = AF_UNSPEC;
@@ -225,6 +238,9 @@ class external_side
 
     	close(sock);
 	}
+ 	void send_request(char** request){
+		//TODO: Implement
+	}
 };
 
 class proxy
@@ -238,25 +254,33 @@ class proxy
 		internal = new internal_side();
 		external = new external_side();
 	}
-	void init(char* c_port, char* hostname){
+	void init(char* c_port){
 		internal->init_socket(c_port);
-		//external->init_socket(hostname);
+		//external->init_socket();
 	}
 	void run(){
-		internal->accept_connection();
+		// The listening process will remain in this call:
+		internal->probe_and_fork_connection();
+
+		// Processes with a connection will start here:
+		char* request = internal->receive_request();
+
+		external->send_request(&request);
+
+		// Kill connected processes
+		internal->terminate_connection();
 	}
 };
 
 int main(int argc, char** argv)
 {
-	if (argc != 3) {
-        fprintf(stderr,"usage: %s port client_hostname\n",argv[0]);
+	if (argc != 2) {
+        fprintf(stderr,"usage: %s port\n",argv[0]);
         exit(1);
     }
 	char* CPORT = argv[1];  // the port users will be connecting to
-	char* host_name = argv[2]; // the ip to host
 	proxy* myProxy = new proxy();
-	myProxy->init(CPORT,host_name);
+	myProxy->init(CPORT);
 	myProxy->run();
-	return 1;
+	return 0;
 }
