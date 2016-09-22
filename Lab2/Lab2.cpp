@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <regex.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
@@ -17,10 +18,25 @@
 #endif
 
 #define MAX_QUEUE_SIZE 10
-#define MAXDATASIZE 1000
+#define MAXDATASIZE 5000
 class HTTP_parser
 {
+	// Search a header for a key-value. Returns the key value if there is any.
+	// If a the header is not found a null string is returned.
+	std::string replace_connection_to_closed(std::string input){
+		std::string str = input;
 
+		std::string connection("Connection: ");
+		std::string replace_string ("close");
+		int connection_index = str.find(&connection);
+		int end_index = str.find("\\r\\n", connection_index);
+
+		int start_pos = connection_index+connection.size();
+		int replace_length = end_index - start_pos;
+		str.replace(start_pos, replace_length, &replace_string );
+
+		return str;
+	}
 };
 
 class internal_side
@@ -36,7 +52,7 @@ class internal_side
 	struct sockaddr their_addr; // connector's address information
 	socklen_t sin_size;
 	char* cport;
-    char s[INET6_ADDRSTRLEN];
+  char s[INET6_ADDRSTRLEN];
 
 	struct sigaction sa;
 
@@ -84,13 +100,14 @@ class internal_side
 		}
 	}
 
-	
-	//	Receive http request from client and forward to external side
-	char *receive_request(){
-		char *request = new char[MAXDATASIZE];
-		recv(connected_sock, request, MAXDATASIZE-1, 0);	//TODO: implement received buffer and process http get request.
-		fprintf(stderr,"%s \n", request);			// Forward get request to external side.
 
+	//	Receive http request from client and forward to external side
+	std::string receive_request(){
+		char *buffer = new char[MAXDATASIZE];
+		recv(connected_sock, buffer, MAXDATASIZE-1, 0);	//TODO: implement received buffer and process http get request.
+		fprintf(stderr,"%s \n", buffer);			// Forward get request to external side.
+
+		std::string request(str);
 		return request;
 	}
 
@@ -160,20 +177,20 @@ class internal_side
 };
 
 class external_side
-{	
+{
 	HTTP_parser parser; //Parser to manipulate received HTTP's.
 
 	int sock;	//Handle to socket
-	int numbytes; //   
+	int numbytes; //
     char buf[MAXDATASIZE]; //Buffer for incoming messages
-    struct addrinfo hints;	
+    struct addrinfo hints;
     struct addrinfo* resp;
     struct addrinfo* p; //
     int addr_status;
     char s[INET6_ADDRSTRLEN];
     char* _hostname;
     char* port;
-    
+
 	public:
     external_side(){
     	port = "80";
@@ -249,7 +266,6 @@ class proxy
 	internal_side* internal;
 	external_side* external;
 
-
 	proxy(){
 		internal = new internal_side();
 		external = new external_side();
@@ -263,7 +279,7 @@ class proxy
 		internal->probe_and_fork_connection();
 
 		// Processes with a connection will start here:
-		char* request = internal->receive_request();
+		std::string request = internal->receive_request();
 
 		external->send_request(&request);
 
