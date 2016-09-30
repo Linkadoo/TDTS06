@@ -27,35 +27,40 @@ public:
 	// Search a header for a key-value. Returns the key value if there is any.
 	// If a the header is not found a null string is returned.
 	std::string replace_connection_to_closed(std::string input){
-		std::string str = input;
+		std::string return_string;
 
 		const std::string connection("Connection: ");
 		std::string replace_string ("close");
-		int connection_index = str.find(connection);
-		int end_index = str.find("\\r\\n", connection_index);
+		int connection_index = input.find(connection);
 
-		int start_pos = connection_index+connection.size();
-		int replace_length = end_index - start_pos;
-		str.replace(start_pos, replace_length, replace_string );
+		int first_part = connection_index + connection.size();
+		int second_part = input.find("\r\n", connection_index);
 
-		return str;
+		std::string start = input.substr(0,first_part);
+		std::string end = input.substr(second_part);
+
+		return_string = start + replace_string + end;
+		return return_string;
 	}
 
 	std::string get_url_info(std::string request){
 		std::string URL;
 		int url_index;
 
-		std::string find_string = "GET ";
+		std::string find_string = "Host: ";
 		int start_index = request.find(find_string) + find_string.length();
-		int end_index = request.find(" ", start_index);
+		int end_index = request.find("\r\n", start_index);
 		int length = end_index - start_index;
 		URL = request.substr(start_index, length);
+		//fprintf(stderr, "start_index:%d end_index:%d length:%d URL:%s\n",
+		//					start_index, end_index, length, URL.c_str()); //TODO: remove
 
 		return URL;
 	}
 
 	// Returns true if text, false if image
 	bool is_text(std::string message){
+		fprintf(stderr, "%s/n", message.c_str());
 		std::string str = "Content-Type: ";
 		int start_index = message.find(str) + str.length();
 		int end_index = message.find("//r//n", start_index);
@@ -111,12 +116,12 @@ class internal_side
 	 * the main process keeps probing while the forked process returns with the
 	 * handle to a connection in connected_sock. */
 	void probe_and_fork_connection(){
-		while(true){
+		if(true){ ///TODO: while(9)
 			sin_size = sizeof their_addr;
 			connected_sock = accept(sock, (struct sockaddr*) &their_addr, &sin_size);
 			if(connected_sock == -1){
 				perror("accept");
-				continue;
+				//continue; //TODO: reimplement
 			}
 			inet_ntop(their_addr.sa_family, get_IP_addr((struct sockaddr*) &their_addr), s, sizeof(s));
 			printf("server: got connection from %s\n", s);
@@ -219,7 +224,7 @@ class external_side
     struct addrinfo* p; //
     int addr_status;
     char s[INET6_ADDRSTRLEN];
-    const char* hostname_;
+    const char*		 hostname_;
     char* port;
 
 	public:
@@ -233,7 +238,6 @@ class external_side
     	if (sa->sa_family == AF_INET) {
     	    return &(((struct sockaddr_in*)sa)->sin_addr);
    		}
-
     	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 	}
 	void init_socket(){
@@ -242,6 +246,7 @@ class external_side
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_STREAM;
 
+		fprintf(stderr, "identified host:%s asd\n", hostname_);
 		addr_status = getaddrinfo(hostname_, port, &hints, &resp);
 		if (addr_status != 0) {
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(addr_status));
@@ -281,7 +286,7 @@ class external_side
 		//Replace the connection request in the HTTP message with closed.
 		std::string send_request = parser->replace_connection_to_closed(*request);
 		int msg_length = send_request.length();
-
+		fprintf(stderr,"%s", send_request.c_str());
 		//hostname_ is used to connect to host in init_socket()
 		std::string tmp = parser->get_url_info(*request);
 		hostname_ = tmp.c_str();
@@ -293,6 +298,7 @@ class external_side
 
 	bool receive_header(){
 		recv(connected_sock, buffer, MAXDATASIZE-1, 0);
+		fprintf(stderr,"%s\n",buffer);
 		return parser->is_text(std::string(buffer));
 	}
 };
@@ -313,22 +319,22 @@ class proxy
 	}
 	void run(){
 		// The listening process will remain in this call:
-		//internal->probe_and_fork_connection();
+		internal->probe_and_fork_connection();
 
 		// Processes with a connection will start here:
-		std::string request = "GET /wireshark-labs/HTTP-wireshark-file1.html HTTP/1.1\\r\\Host: gaia.cs.umass.edu\\r\\nUser-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:46.0) Gecko/20100101 Firefox/46.0\\r\\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\\r\\nAccept-Language: en-US,en;q=0.5\\r\\nAccept-Encoding: gzip, deflate\\r\\nConnection: keep-alive\\r\\n\\r\\n";
-		//internal->receive_request();
+		//std::string request = "GET /wireshark-labs/HTTP-wireshark-file1.html HTTP/1.1\\r\\Host: gaia.cs.umass.edu\\r\\nUser-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:46.0) Gecko/20100101 Firefox/46.0\\r\\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\\r\\nAccept-Language: en-US,en;q=0.5\\r\\nAccept-Encoding: gzip, deflate\\r\\nConnection: keep-alive\\r\\n\\r\\n";
+		std::string request = internal->receive_request();
 
 		// Connects the external socket to host and sends the HTTP request
 		if(external->send_request(&request) == -1)
 			perror("send"); //TODO? Error handling?
 
 		// Check http header if text or image
-		if(external->receive_header()){
-			external->receive_text();
+		/*if(external->receive_header()){
+			std::cout << "if" << std::endl;//external->receive_text();
 		} else {
-			external->receive_image();
-		}
+			std::cout << "else" << std::endl;//external->receive_image();
+		}*/
 
 		// End connection to host
 		external->terminate_connection();
