@@ -52,26 +52,36 @@ public:
 		int end_index = request.find("\r\n", start_index);
 		int length = end_index - start_index;
 		URL = request.substr(start_index, length);
-		//fprintf(stderr, "start_index:%d end_index:%d length:%d URL:%s\n",
-		//					start_index, end_index, length, URL.c_str()); //TODO: remove
+		fprintf(stderr, "start_index:%d end_index:%d length:%d URL:%s\n",
+							start_index, end_index, length, URL.c_str()); //TODO: remove
 
 		return URL;
 	}
 
 	// Returns true if text, false if image
 	bool is_text(std::string message){
-		fprintf(stderr, "%s/n", message.c_str());
+		//fprintf(stderr, "%s/n", message.c_str());
 		std::string str = "Content-Type: ";
 		int start_index = message.find(str) + str.length();
-		int end_index = message.find("//r//n", start_index);
+		int end_index = message.find("\r\n", start_index);
 
 		//Checking substring (content-type) after type
 		int length = end_index - start_index;
 		std::string type = message.substr(start_index, length);
-
-		if (type.find("text") != 0)
+		if (type.find("text") != -1)
 			return true;
 		return false;
+	}
+
+	int get_content_length(char* msg){
+		const std::string content_length("Content-Length: ");
+		std::string input(msg);
+		int index = input.find(content_length) + content_length.size();
+		int second_index = input.find("\r\n", index);
+
+		std::string length = input.substr(index,second_index-index);
+		printf("length.atoi(): %d\n", atoi(length.c_str()));
+		return atoi(length.c_str());
 	}
 };
 
@@ -116,7 +126,7 @@ class internal_side
 	 * the main process keeps probing while the forked process returns with the
 	 * handle to a connection in connected_sock. */
 	void probe_and_fork_connection(){
-		if(true){ ///TODO: while(9)
+		while(true){
 			sin_size = sizeof their_addr;
 			connected_sock = accept(sock, (struct sockaddr*) &their_addr, &sin_size);
 			if(connected_sock == -1){
@@ -140,7 +150,7 @@ class internal_side
 	std::string receive_request(){
 		char *buffer = new char[MAXDATASIZE];
 		recv(connected_sock, buffer, MAXDATASIZE-1, 0);	//TODO: implement received buffer and process http get request.
-		fprintf(stderr,"%s \n", buffer);			// Forward get request to external side.
+		//fprintf(stderr,"%s \n", buffer);			// Forward get request to external side.
 
 		std::string request(buffer);
 		return request;
@@ -209,6 +219,14 @@ class internal_side
 
 		printf("server: waiting for connections...\n");
 	}
+	void respond(char* msg){
+		int help =1;
+		int sum;
+		while (help >0){
+			help = send(connected_sock, &(msg[sum]), sizeof(msg), 0);
+			sum += help;
+		}
+	}
 };
 
 class external_side
@@ -216,7 +234,6 @@ class external_side
 	HTTP_parser *parser; //Parser to manipulate received HTTP's.
 
 	int sock;	//Handle to socket
-	int connected_sock; //Handle to connected socket
 	int numbytes;
     char buffer[MAXDATASIZE]; //Buffer for incoming messages
     struct addrinfo hints;
@@ -246,7 +263,6 @@ class external_side
 		hints.ai_family = AF_UNSPEC;
 		hints.ai_socktype = SOCK_STREAM;
 
-		fprintf(stderr, "identified host:%s asd\n", hostname_);
 		addr_status = getaddrinfo(hostname_, port, &hints, &resp);
 		if (addr_status != 0) {
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(addr_status));
@@ -286,20 +302,32 @@ class external_side
 		//Replace the connection request in the HTTP message with closed.
 		std::string send_request = parser->replace_connection_to_closed(*request);
 		int msg_length = send_request.length();
-		fprintf(stderr,"%s", send_request.c_str());
+
 		//hostname_ is used to connect to host in init_socket()
 		std::string tmp = parser->get_url_info(*request);
 		hostname_ = tmp.c_str();
 		init_socket();
 
 		//Send the HTTP message to host
-		return send(connected_sock, send_request.c_str(), msg_length, 0);
+		return send(sock, send_request.c_str(), msg_length, 0);
 	}
 
 	bool receive_header(){
-		recv(connected_sock, buffer, MAXDATASIZE-1, 0);
-		fprintf(stderr,"%s\n",buffer);
+		recv(sock, buffer, MAXDATASIZE-1, 0);
+		fprintf(stderr,"Received buffer: %s\n",buffer);
 		return parser->is_text(std::string(buffer));
+	}
+
+	char* receive_text(){
+		int msg_length = parser->get_content_length(buffer);
+		int buf_index = strlen(buffer);
+		int bytes_received=1;
+		while(bytes_received > 0){
+			bytes_received = recv(sock, &(buffer[buf_index]), MAXDATASIZE-1, 0);
+			buf_index += bytes_received;
+			//fprintf(stderr, "Bytes received: %d, Buffer length: %d, msg_length: %d\n",bytes_received, buf_index, msg_length);
+		}
+		return buffer;
 	}
 };
 
@@ -308,7 +336,7 @@ class proxy
 	public:
 	internal_side* internal;
 	external_side* external;
-
+	char* transfer_buffer;
 	proxy(){
 		internal = new internal_side();
 		external = new external_side();
@@ -330,11 +358,17 @@ class proxy
 			perror("send"); //TODO? Error handling?
 
 		// Check http header if text or image
-		/*if(external->receive_header()){
-			std::cout << "if" << std::endl;//external->receive_text();
+		if(external->receive_header()){
+			transfer_buffer = external->receive_text();
+			internal->respond(transfer_buffer);
 		} else {
-			std::cout << "else" << std::endl;//external->receive_image();
-		}*/
+			//Image
+			transfer_buffer = external->receive_text();
+			internal->respond(transfer_buffer);
+				;//receive_image();
+		}
+			external->terminate_connection();
+			internal->terminate_connection();
 
 		// End connection to host
 		external->terminate_connection();
