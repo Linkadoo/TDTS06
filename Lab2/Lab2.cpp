@@ -83,6 +83,22 @@ public:
 		printf("length.atoi(): %d\n", atoi(length.c_str()));
 		return atoi(length.c_str());
 	}
+	bool inappropriate_content(std::string text){
+		bool inappropriate = false;
+		std::string spongebob = "SpongeBob";
+		std::string britney = "Britney Spears";
+		std::string paris = "Paris Hilton";
+		std::string norr = "Norrköping";
+		
+		if (text.find(spongebob) != -1 ||
+			text.find(britney) != -1 ||
+			text.find(paris) != -1 ||
+			text.find(norr) != -1){
+				inappropriate = true;
+			}
+		
+		return inappropriate;
+	}
 };
 
 class internal_side
@@ -97,7 +113,7 @@ class internal_side
 	struct sockaddr their_addr; // connector's address information
 	socklen_t sin_size;
 	char* cport;
-  char s[INET6_ADDRSTRLEN];
+	char s[INET6_ADDRSTRLEN];
 
 	struct sigaction sa;
 
@@ -220,9 +236,9 @@ class internal_side
 		printf("server: waiting for connections...\n");
 	}
 	void respond(char* msg){
-		int help =1;
+		int help = 1;
 		int sum;
-		while (help >0){
+		while (help > 0){
 			help = send(connected_sock, &(msg[sum]), sizeof(msg), 0);
 			sum += help;
 		}
@@ -360,6 +376,9 @@ class proxy
 		// Check http header if text or image
 		if(external->receive_header()){
 			transfer_buffer = external->receive_text();
+			if(external->parser->inappropriate_content(transfer_buffer)){
+				//inappropriate content, reroute to other website
+			}
 			internal->respond(transfer_buffer);
 		} else {
 			//Image
