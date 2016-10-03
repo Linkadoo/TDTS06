@@ -20,7 +20,7 @@
 #endif
 
 #define MAX_QUEUE_SIZE 10
-#define MAXDATASIZE 5000
+#define MAXDATASIZE 100000
 class HTTP_parser
 {
 public:
@@ -36,8 +36,21 @@ public:
 		int first_part = connection_index + connection.size();
 		int second_part = input.find("\r\n", connection_index);
 
-		std::string start = input.substr(0,first_part);
-		std::string end = input.substr(second_part);
+		if(first_part == connection.size()-1 || second_part == -1)
+			//Bad request
+			exit(1);
+		//TODO OBS
+		std::string start;
+		std::string end;
+		try{
+		 start = input.substr(0,first_part);
+		 end = input.substr(second_part);
+		}
+		catch(std::exception error){
+			fprintf(stderr, "We caught an error! The error was in parser: %s\n",error.what());
+			fprintf(stderr, "first_part: %d, second_part: %d, size of input: %d \n", first_part, second_part, strlen(input.c_str()));
+			fprintf(stderr, "the HTTP request: %s\n", input.c_str());
+		}
 
 		return_string = start + replace_string + end;
 		return return_string;
@@ -89,14 +102,14 @@ public:
 		std::string britney = "Britney Spears";
 		std::string paris = "Paris Hilton";
 		std::string norr = "Norrköping";
-		
+
 		if (text.find(spongebob) != -1 ||
 			text.find(britney) != -1 ||
 			text.find(paris) != -1 ||
 			text.find(norr) != -1){
 				inappropriate = true;
 			}
-		
+
 		return inappropriate;
 	}
 };
@@ -117,8 +130,7 @@ class internal_side
 
 	struct sigaction sa;
 
-	static void sigchld_handler(int s)
-	{
+	static void sigchld_handler(int s){
 	    // waitpid() might overwrite errno, so we save and restore it:
 	    int saved_errno = errno;
 
@@ -128,8 +140,7 @@ class internal_side
 	}
 
 	// get sockaddr, IPv4 or IPv6:
-	void *get_IP_addr(struct sockaddr *sa)
-	{
+	void *get_IP_addr(struct sockaddr *sa){
 	    if (sa->sa_family == AF_INET) {
 	        return &(((struct sockaddr_in*)sa)->sin_addr);
 	    }
@@ -235,6 +246,12 @@ class internal_side
 
 		printf("server: waiting for connections...\n");
 	}
+	void reroute_content(){
+
+	}
+	void reroute_url(){
+
+	}
 	void respond(char* msg){
 		int help = 1;
 		int sum;
@@ -243,25 +260,29 @@ class internal_side
 			sum += help;
 		}
 	}
+	void forward_nontext(char* buffer){
+			send(connected_sock, buffer, strlen(buffer), 0);
+	}
 };
 
 class external_side
 {
+public:
 	HTTP_parser *parser; //Parser to manipulate received HTTP's.
 
 	int sock;	//Handle to socket
 	int numbytes;
-    char buffer[MAXDATASIZE]; //Buffer for incoming messages
-    struct addrinfo hints;
-    struct addrinfo* resp;
-    struct addrinfo* p; //
-    int addr_status;
-    char s[INET6_ADDRSTRLEN];
-    const char*		 hostname_;
-    char* port;
+  char buffer[MAXDATASIZE]; //Buffer for incoming messages
+  struct addrinfo hints;
+  struct addrinfo* resp;
+  struct addrinfo* p; //
+  int addr_status;
+  char s[INET6_ADDRSTRLEN];
+  const char*		 hostname_;
+  char* port;
 
-	public:
-    external_side(){
+public:
+  external_side(){
 			parser = new HTTP_parser();
     	port = "80";
     }
@@ -330,10 +351,14 @@ class external_side
 
 	bool receive_header(){
 		recv(sock, buffer, MAXDATASIZE-1, 0);
-		fprintf(stderr,"Received buffer: %s\n",buffer);
 		return parser->is_text(std::string(buffer));
 	}
 
+	bool receive_image(){
+		if(recv(sock, &buffer, MAXDATASIZE-1, 0) > 0)
+			return true;
+		return false;
+	}
 	char* receive_text(){
 		int msg_length = parser->get_content_length(buffer);
 		int buf_index = strlen(buffer);
@@ -341,8 +366,8 @@ class external_side
 		while(bytes_received > 0){
 			bytes_received = recv(sock, &(buffer[buf_index]), MAXDATASIZE-1, 0);
 			buf_index += bytes_received;
-			//fprintf(stderr, "Bytes received: %d, Buffer length: %d, msg_length: %d\n",bytes_received, buf_index, msg_length);
 		}
+	  fprintf(stderr,"\n\n Received buffer: %s\n",buffer);
 		return buffer;
 	}
 };
@@ -356,10 +381,10 @@ class proxy
 	proxy(){
 		internal = new internal_side();
 		external = new external_side();
+		transfer_buffer = new char[MAXDATASIZE];
 	}
 	void init(char* c_port){
 		internal->init_socket(c_port);
-		//external->init_socket();
 	}
 	void run(){
 		// The listening process will remain in this call:
@@ -378,21 +403,24 @@ class proxy
 			transfer_buffer = external->receive_text();
 			if(external->parser->inappropriate_content(transfer_buffer)){
 				//inappropriate content, reroute to other website
+				internal->reroute_content();
 			}
 			internal->respond(transfer_buffer);
 		} else {
 			//Image
-			transfer_buffer = external->receive_text();
-			internal->respond(transfer_buffer);
-				;//receive_image();
+			forward_nontext();
 		}
-			external->terminate_connection();
-			internal->terminate_connection();
-
 		// End connection to host
 		external->terminate_connection();
 		// Kill connected processes
 		internal->terminate_connection();
+	}
+
+	void forward_nontext(){
+		do{	//Header already received
+			transfer_buffer = external->buffer;
+			internal->forward_nontext(transfer_buffer);
+		} while(external->receive_image());
 	}
 };
 
