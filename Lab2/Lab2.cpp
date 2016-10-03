@@ -65,9 +65,6 @@ public:
 		int end_index = request.find("\r\n", start_index);
 		int length = end_index - start_index;
 		URL = request.substr(start_index, length);
-		fprintf(stderr, "start_index:%d end_index:%d length:%d URL:%s\n",
-							start_index, end_index, length, URL.c_str()); //TODO: remove
-
 		return URL;
 	}
 
@@ -93,7 +90,6 @@ public:
 		int second_index = input.find("\r\n", index);
 
 		std::string length = input.substr(index,second_index-index);
-		printf("length.atoi(): %d\n", atoi(length.c_str()));
 		return atoi(length.c_str());
 	}
 	bool inappropriate_content(std::string text){
@@ -127,6 +123,7 @@ class internal_side
 	socklen_t sin_size;
 	char* cport;
 	char s[INET6_ADDRSTRLEN];
+	char forward_buffer[MAXDATASIZE];
 
 	struct sigaction sa;
 
@@ -161,7 +158,6 @@ class internal_side
 				//continue; //TODO: reimplement
 			}
 			inet_ntop(their_addr.sa_family, get_IP_addr((struct sockaddr*) &their_addr), s, sizeof(s));
-			printf("server: got connection from %s\n", s);
 
 			if(!fork()){
 				//Close listening socket for the processes with a connection
@@ -254,14 +250,15 @@ class internal_side
 	}
 	void respond(char* msg){
 		int help = 1;
-		int sum;
+		int sum = 0;
 		while (help > 0){
 			help = send(connected_sock, &(msg[sum]), sizeof(msg), 0);
 			sum += help;
 		}
 	}
-	void forward_nontext(char* buffer){
-			send(connected_sock, buffer, strlen(buffer), 0);
+	void forward_nontext(char* buffer, int size){
+			strncpy(forward_buffer, buffer, sizeof(buffer));
+			send(connected_sock, forward_buffer, size, 0);
 	}
 };
 
@@ -349,16 +346,22 @@ public:
 		return send(sock, send_request.c_str(), msg_length, 0);
 	}
 
-	bool receive_header(){
-		recv(sock, buffer, MAXDATASIZE-1, 0);
+	int receive_header(){
+		int received = 0;
+		while(std::string(buffer).find("\r\n\r\n") == -1){
+				received += recv(sock, &(buffer[received]), MAXDATASIZE-1, 0);
+		}
+		return received;
+  }
+
+  bool is_text(){
 		return parser->is_text(std::string(buffer));
 	}
 
-	bool receive_image(){
-		if(recv(sock, &buffer, MAXDATASIZE-1, 0) > 0)
-			return true;
-		return false;
+	int receive_image(){
+		return recv(sock, &buffer, MAXDATASIZE-1, 0);
 	}
+
 	char* receive_text(){
 		int msg_length = parser->get_content_length(buffer);
 		int buf_index = strlen(buffer);
@@ -367,7 +370,7 @@ public:
 			bytes_received = recv(sock, &(buffer[buf_index]), MAXDATASIZE-1, 0);
 			buf_index += bytes_received;
 		}
-	  fprintf(stderr,"\n\n Received buffer: %s\n",buffer);
+	  // TODO fprintf(stderr,"\n\n Received buffer: %s\n",buffer);
 		return buffer;
 	}
 };
@@ -399,28 +402,37 @@ class proxy
 			perror("send"); //TODO? Error handling?
 
 		// Check http header if text or image
-		if(external->receive_header()){
+		int received_bytes = external->receive_header();
+		if(external->is_text()){
 			transfer_buffer = external->receive_text();
-			if(external->parser->inappropriate_content(transfer_buffer)){
+			//if(external->parser->inappropriate_content(transfer_buffer)){
 				//inappropriate content, reroute to other website
-				internal->reroute_content();
-			}
+				//internal->reroute_content();
+			//}
 			internal->respond(transfer_buffer);
 		} else {
 			//Image
-			forward_nontext();
+			forward_nontext(received_bytes);
 		}
 		// End connection to host
 		external->terminate_connection();
 		// Kill connected processes
 		internal->terminate_connection();
+		fprintf(stderr, "Closing PID...");
 	}
 
-	void forward_nontext(){
-		do{	//Header already received
+	void forward_nontext(int received_bytes){
+		int received = 0;
+		transfer_buffer = external->buffer;
+		internal->forward_nontext(transfer_buffer, received_bytes);
+		//int length = external->parser->get_content_length(transfer_buffer);
+
+		while((received = external->receive_image()) > 0){	//Header already received
+			//length -= received;
 			transfer_buffer = external->buffer;
-			internal->forward_nontext(transfer_buffer);
-		} while(external->receive_image());
+			fprintf(stderr, "Forwarded message: %s\n", transfer_buffer);
+			internal->forward_nontext(transfer_buffer, received);
+		}
 	}
 };
 
