@@ -40,17 +40,8 @@ public:
 			//Bad request
 			exit(1);
 		//TODO OBS
-		std::string start;
-		std::string end;
-		try{
-		 start = input.substr(0,first_part);
-		 end = input.substr(second_part);
-		}
-		catch(std::exception error){
-			fprintf(stderr, "We caught an error! The error was in parser: %s\n",error.what());
-			fprintf(stderr, "first_part: %d, second_part: %d, size of input: %d \n", first_part, second_part, strlen(input.c_str()));
-			fprintf(stderr, "the HTTP request: %s\n", input.c_str());
-		}
+		std::string start = input.substr(0,first_part);
+		std::string end = input.substr(second_part);
 
 		return_string = start + replace_string + end;
 		return return_string;
@@ -257,8 +248,17 @@ class internal_side
 		}
 	}
 	void forward_nontext(char* buffer, int size){
-			strncpy(forward_buffer, buffer, sizeof(buffer));
-			send(connected_sock, forward_buffer, size, 0);
+			//strncpy(forward_buffer, buffer, size);
+			int left_to_send = size;
+			int sent = 0;
+			int send_index = 0;
+			while(left_to_send>0){
+				sent = send(connected_sock, &(buffer[send_index]), size, 0);
+				left_to_send -= sent;
+				send_index += sent;
+				fprintf(stderr, "sent: %d\n", sent);
+			}
+
 	}
 };
 
@@ -278,7 +278,6 @@ public:
   const char*		 hostname_;
   char* port;
 
-public:
   external_side(){
 			parser = new HTTP_parser();
     	port = "80";
@@ -324,7 +323,7 @@ public:
 		}
 
 		inet_ntop(p->ai_family, get_in_addr((struct sockaddr*) p->ai_addr), s, sizeof(s));
-		printf("client: connecting to %s\n", s);
+		fprintf(stderr, "client: connecting to %s\n", s);
 
 		freeaddrinfo(resp); // all done with this structure
 	}
@@ -418,20 +417,17 @@ class proxy
 		external->terminate_connection();
 		// Kill connected processes
 		internal->terminate_connection();
-		fprintf(stderr, "Closing PID...");
 	}
 
 	void forward_nontext(int received_bytes){
 		int received = 0;
-		transfer_buffer = external->buffer;
-		internal->forward_nontext(transfer_buffer, received_bytes);
+		internal->forward_nontext(external->buffer, received_bytes);
 		//int length = external->parser->get_content_length(transfer_buffer);
 
 		while((received = external->receive_image()) > 0){	//Header already received
 			//length -= received;
-			transfer_buffer = external->buffer;
-			fprintf(stderr, "Forwarded message: %s\n", transfer_buffer);
-			internal->forward_nontext(transfer_buffer, received);
+			fprintf(stderr, "received: %d\n", received);
+			internal->forward_nontext(external->buffer, received);
 		}
 	}
 };
