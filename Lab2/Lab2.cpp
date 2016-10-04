@@ -8,7 +8,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-
+#include <algorithm>
 #ifdef __WIN32__
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -47,11 +47,10 @@ public:
 		return return_string;
 	}
 
-	std::string get_url_info(std::string request){
+	std::string get_url_info(std::string request, std::string find_string){
 		std::string URL;
 		int url_index;
 
-		std::string find_string = "Host: ";
 		int start_index = request.find(find_string) + find_string.length();
 		int end_index = request.find("\r\n", start_index);
 		int length = end_index - start_index;
@@ -85,10 +84,10 @@ public:
 	}
 	bool inappropriate_content(std::string text){
 		bool inappropriate = false;
-		std::string spongebob = "SpongeBob";
-		std::string britney = "Britney Spears";
-		std::string paris = "Paris Hilton";
-		std::string norr = "Norrköping";
+		std::string spongebob = "spongebob";
+		std::string britney = "britney spears";
+		std::string paris = "paris hilton";
+		std::string norr = "norrköping";
 
 		if (text.find(spongebob) != -1 ||
 			text.find(britney) != -1 ||
@@ -235,12 +234,41 @@ public:
 
 		printf("server: waiting for connections...\n");
 	}
-	void reroute_content(){
-
+	const char* reroute_content(){
+		std::string url = "http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error2.html";
+		std::string rerouted_url = "HTTP/1.1 301 Moved Permanently \r\n"
+												"Location: " + url + " \r\n"
+												"Content-Type: text/html \r\n"
+												"Content-Length: 174 \r\n\r\n"
+												"<html> \r\n"
+												"<head> \r\n"
+												"<title>Moved</title> \r\n"
+												"</head> \r\n"
+												"<body> \r\n"
+												"<h1>Moved</h1> \r\n"
+												"<p>This page has moved to <a href=" + url +">" + url + "</a>.</p> \r\n"
+												"</body> \r\n"
+												"</html> \r\n\r\n";
+		return rerouted_url.c_str();
 	}
-	void reroute_url(){
-
+	const char* reroute_url(){
+		std::string url = "http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html";
+		std::string rerouted_url = "HTTP/1.1 301 Moved Permanently \r\n"
+												"Location: " + url + " \r\n"
+												"Content-Type: text/html \r\n"
+												"Content-Length: 174 \r\n\r\n"
+												"<html> \r\n"
+												"<head> \r\n"
+												"<title>Moved</title> \r\n"
+												"</head> \r\n"
+												"<body> \r\n"
+												"<h1>Moved</h1> \r\n"
+												"<p>This page has moved to <a href=" + url +">" + url + "</a>.</p> \r\n"
+												"</body> \r\n"
+												"</html> \r\n\r\n";
+		return rerouted_url.c_str();
 	}
+
 	void respond(char* msg){
 		int help = 1;
 		int sum = 0;
@@ -339,7 +367,7 @@ public:
 		int msg_length = send_request.length();
 
 		//hostname_ is used to connect to host in init_socket()
-		std::string tmp = parser->get_url_info(*request);
+		std::string tmp = parser->get_url_info(*request, "Host: ");
 		hostname_ = tmp.c_str();
 		init_socket();
 
@@ -398,7 +426,17 @@ class proxy
 		// Processes with a connection will start here:
 		//std::string request = "GET /wireshark-labs/HTTP-wireshark-file1.html HTTP/1.1\\r\\Host: gaia.cs.umass.edu\\r\\nUser-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:46.0) Gecko/20100101 Firefox/46.0\\r\\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\\r\\nAccept-Language: en-US,en;q=0.5\\r\\nAccept-Encoding: gzip, deflate\\r\\nConnection: keep-alive\\r\\n\\r\\n";
 		std::string request = internal->receive_request();
-
+		// Check for bad URL request
+		std::string url = external->parser->get_url_info(request, "GET ");
+		std::transform(url.begin(), url.end(), url.begin(), ::tolower);
+		if(external->parser->inappropriate_content(url)){
+			request = internal->reroute_url();
+			internal->respond((char*)request.c_str());
+			// End connection to host
+			external->terminate_connection();
+			// Kill connected processes
+			internal->terminate_connection();
+		}
 		// Connects the external socket to host and sends the HTTP request
 		fprintf(stderr, "PID: %d, Request:\n %s\nEND\n",internal->pid_, request.c_str());
 		if(external->send_request(&request) == -1)
@@ -409,11 +447,14 @@ class proxy
 		//fprintf(stderr, "PID: %d, Response:\n %s\nEND\n", external->buffer);
 		if(external->is_text()){
 			transfer_buffer = external->receive_text(received_bytes);
-			fprintf(stderr, "PID: %d, Response:\n %s\nEND\n",internal->pid_, external->buffer);
-			//if(external->parser->inappropriate_content(transfer_buffer)){
+			//fprintf(stderr, "PID: %d, Response:\n %s\nEND\n",internal->pid_, external->buffer);
+			std::string tmp = std::string(transfer_buffer);
+			std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+			if(external->parser->inappropriate_content(tmp)){
 				//inappropriate content, reroute to other website
-				//internal->reroute_content();
-			//}
+
+				transfer_buffer = (char*) internal->reroute_content();
+			}
 			internal->respond(transfer_buffer);
 		} else {
 			//Image
