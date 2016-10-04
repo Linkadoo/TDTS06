@@ -103,8 +103,10 @@ public:
 
 class internal_side
 {
+public:
 	int sock;  // socket handle for listening process
 	int connected_sock;	//socket for processes with a connection
+	int pid_;
 
 	int addr_status;
 	struct addrinfo hints;
@@ -149,16 +151,16 @@ class internal_side
 				//continue; //TODO: reimplement
 			}
 			inet_ntop(their_addr.sa_family, get_IP_addr((struct sockaddr*) &their_addr), s, sizeof(s));
-
-			if(!fork()){
+			pid_ = fork();
+			if(!pid_){
 				//Close listening socket for the processes with a connection
+				fprintf(stderr, "Process starting\n");
 				close(sock);
 				return;
 			}
 			close(connected_sock); // Close connected socket for
 		}
 	}
-
 
 	//	Receive http request from client and forward to external side
 	std::string receive_request(){
@@ -172,7 +174,7 @@ class internal_side
 
 	void terminate_connection(){
 		close(connected_sock);
-		exit(0);
+		//exit(0);
 	}
 
 	/* Method used to initialize the listening socket. */
@@ -246,6 +248,7 @@ class internal_side
 			help = send(connected_sock, &(msg[sum]), sizeof(msg), 0);
 			sum += help;
 		}
+		//fprintf(stderr, "text_message: %s\n ", msg);
 	}
 	void forward_nontext(char* buffer, int size){
 			//strncpy(forward_buffer, buffer, size);
@@ -256,9 +259,8 @@ class internal_side
 				sent = send(connected_sock, &(buffer[send_index]), size, 0);
 				left_to_send -= sent;
 				send_index += sent;
-				fprintf(stderr, "sent: %d\n", sent);
 			}
-
+			fprintf(stderr, "image part sent: %d\n ", sent);
 	}
 };
 
@@ -361,14 +363,15 @@ public:
 		return recv(sock, &buffer, MAXDATASIZE-1, 0);
 	}
 
-	char* receive_text(){
-		int msg_length = parser->get_content_length(buffer);
-		int buf_index = strlen(buffer);
-		int bytes_received=1;
-		while(bytes_received > 0){
-			bytes_received = recv(sock, &(buffer[buf_index]), MAXDATASIZE-1, 0);
-			buf_index += bytes_received;
+	char* receive_text(int received_bytes){
+		//int msg_length = parser->get_content_length(buffer);
+		int buf_index = received_bytes;
+		//int bytes_received=1;
+		while(received_bytes > 0){
+			received_bytes = recv(sock, &(buffer[buf_index]), MAXDATASIZE-1, 0);
+			buf_index += received_bytes;
 		}
+
 	  // TODO fprintf(stderr,"\n\n Received buffer: %s\n",buffer);
 		return buffer;
 	}
@@ -397,13 +400,16 @@ class proxy
 		std::string request = internal->receive_request();
 
 		// Connects the external socket to host and sends the HTTP request
+		fprintf(stderr, "PID: %d, Request:\n %s\nEND\n",internal->pid_, request.c_str());
 		if(external->send_request(&request) == -1)
 			perror("send"); //TODO? Error handling?
 
 		// Check http header if text or image
 		int received_bytes = external->receive_header();
+		//fprintf(stderr, "PID: %d, Response:\n %s\nEND\n", external->buffer);
 		if(external->is_text()){
-			transfer_buffer = external->receive_text();
+			transfer_buffer = external->receive_text(received_bytes);
+			fprintf(stderr, "PID: %d, Response:\n %s\nEND\n",internal->pid_, external->buffer);
 			//if(external->parser->inappropriate_content(transfer_buffer)){
 				//inappropriate content, reroute to other website
 				//internal->reroute_content();
