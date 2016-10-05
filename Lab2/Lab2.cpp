@@ -20,22 +20,20 @@
 #endif
 
 #define MAX_QUEUE_SIZE 10
-#define MAXDATASIZE 100000
+#define MAXDATASIZE 1000000
 class HTTP_parser
 {
 public:
 	// Search a header for a key-value. Returns the key value if there is any.
 	// If a the header is not found a null string is returned.
-	std::string replace_connection_to_closed(std::string input){
+	std::string replace_content(std::string input, std::string find, std::string replace_string){
 		std::string return_string;
 
-		const std::string connection("Connection: ");
-		std::string replace_string ("close");
-		int connection_index = input.find(connection);
-		int first_part = connection_index + connection.size();
-		int second_part = input.find("\r\n", connection_index);
+		int find_index = input.find(find);
+		int first_part = find_index + find.size();
+		int second_part = input.find("\r\n", find_index);
 
-		if(first_part == connection.size()-1 || second_part == -1)
+		if(first_part == find.size()-1 || second_part == -1)
 			//Bad request
 			exit(1);
 		//TODO OBS
@@ -43,6 +41,24 @@ public:
 		std::string end = input.substr(second_part);
 
 		return_string = start + replace_string + end;
+		return return_string;
+	}
+
+	std::string remove_content(std::string input, std::string find){
+		std::string return_string;
+
+		int find_index = input.find(find);
+		int first_part = find_index;
+		int second_part = input.find("\r\n", find_index);
+
+		if(first_part == find.size()-1 || second_part == -1)
+			//Bad request
+			exit(1);
+		//TODO OBS
+		std::string start = input.substr(0,first_part);
+		std::string end = input.substr(second_part+2);
+
+		return_string = start + end;
 		return return_string;
 	}
 
@@ -92,16 +108,21 @@ public:
 		std::string britney = "britney spears";
 		std::string paris = "paris hilton";
 		std::string norr = "norrköping";
+		std::string norr1 = "norrkoping";
+		std::string norr2 = "norrk&ouml;ping";
 
 		if (text.find(spongebob) != -1 ||
 			text.find(britney) != -1 ||
 			text.find(paris) != -1 ||
-			text.find(norr) != -1){
+			text.find(norr) != -1 ||
+			text.find(norr1) != -1 ||
+			text.find(norr2) != -1){
 				inappropriate = true;
 			}
 		return inappropriate;
 	}
 };
+
 
 // Internal class for handling communication between client and proxy
 class internal_side
@@ -293,10 +314,8 @@ public:
 				left_to_send -= sent;
 				send_index += sent;
 			}
-			fprintf(stderr, "image part sent: %d\n ", sent);
 	}
 };
-
 
 
 // External class for communication between proxy and server
@@ -373,7 +392,8 @@ public:
 
 	// Sends the request to server (with keep-alive replaced)
  	int send_request(std::string *request){
-		std::string send_request = parser->replace_connection_to_closed(*request);
+		std::string send_request = parser->replace_content(*request, "Connection: ", "close");
+		send_request = parser->remove_content(send_request, "Accept-Encoding: ");
 		int msg_length = send_request.length();
 
 		//hostname_ is used to connect to host in init_socket()
@@ -411,6 +431,7 @@ public:
 			received_bytes = recv(sock, &(buffer[buf_index]), MAXDATASIZE-1, 0);
 			buf_index += received_bytes;
 		}
+		//fprintf(stderr, "received:\n %s\nEND\n", buffer);
 		return buffer;
 	}
 };
@@ -441,7 +462,7 @@ class proxy
 
 		// Processes with a connection will start here:
 		std::string request = internal->receive_request();
-
+				fprintf(stderr, "request:\n %s\nEND\n", request.c_str());
 		// Check for bad URL request
 		std::string url = external->parser->get_url_info(request, "GET ");
 		std::transform(url.begin(), url.end(), url.begin(), ::tolower);
@@ -456,12 +477,12 @@ class proxy
 		}
 
 		// Connects the external socket to host and sends the HTTP request
-		fprintf(stderr, "PID: %d, Request:\n %s\nEND\n",internal->pid_, request.c_str());
 		if(external->send_request(&request) == -1)
 			perror("send"); //TODO? Error handling?
 
 		// Check http header if text or image
 		int received_bytes = external->receive_header();
+				fprintf(stderr, "receive:\n %s\nEND\n", external->buffer);
 
 		if(external->is_text()){
 			transfer_buffer = external->receive_text(received_bytes);
