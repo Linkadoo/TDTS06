@@ -32,7 +32,6 @@ public:
 		const std::string connection("Connection: ");
 		std::string replace_string ("close");
 		int connection_index = input.find(connection);
-
 		int first_part = connection_index + connection.size();
 		int second_part = input.find("\r\n", connection_index);
 
@@ -47,6 +46,8 @@ public:
 		return return_string;
 	}
 
+	// Searches the string request for the string find_string and returns the
+	// string after find_string which ends with \r\n.
 	std::string get_url_info(std::string request, std::string find_string){
 		std::string URL;
 		int url_index;
@@ -73,6 +74,7 @@ public:
 		return false;
 	}
 
+	// returns the content_length of the message as an integer
 	int get_content_length(char* msg){
 		const std::string content_length("Content-Length: ");
 		std::string input(msg);
@@ -82,6 +84,8 @@ public:
 		std::string length = input.substr(index,second_index-index);
 		return atoi(length.c_str());
 	}
+
+	// returns true if inappropriate content is found in the input text
 	bool inappropriate_content(std::string text){
 		bool inappropriate = false;
 		std::string spongebob = "spongebob";
@@ -95,11 +99,11 @@ public:
 			text.find(norr) != -1){
 				inappropriate = true;
 			}
-
 		return inappropriate;
 	}
 };
 
+// Internal class for handling communication between client and proxy
 class internal_side
 {
 public:
@@ -164,16 +168,13 @@ public:
 	//	Receive http request from client and forward to external side
 	std::string receive_request(){
 		char *buffer = new char[MAXDATASIZE];
-		recv(connected_sock, buffer, MAXDATASIZE-1, 0);	//TODO: implement received buffer and process http get request.
-		//fprintf(stderr,"%s \n", buffer);			// Forward get request to external side.
-
+		recv(connected_sock, buffer, MAXDATASIZE-1, 0);
 		std::string request(buffer);
 		return request;
 	}
 
 	void terminate_connection(){
 		close(connected_sock);
-		//exit(0);
 	}
 
 	/* Method used to initialize the listening socket. */
@@ -190,7 +191,6 @@ public:
 			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(addr_status));
 			exit(1);
 		}
-
 
 		//Loop through internal_side addrinfo response
 		for(p=resp; p!=NULL; p=p->ai_next){
@@ -234,6 +234,8 @@ public:
 
 		printf("server: waiting for connections...\n");
 	}
+
+	// returns the http request for bad content
 	const char* reroute_content(){
 		std::string url = "http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error2.html";
 		std::string rerouted_url = "HTTP/1.1 301 Moved Permanently \r\n"
@@ -251,6 +253,8 @@ public:
 												"</html> \r\n\r\n";
 		return rerouted_url.c_str();
 	}
+
+	// returns the http request for bad url
 	const char* reroute_url(){
 		std::string url = "http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html";
 		std::string rerouted_url = "HTTP/1.1 301 Moved Permanently \r\n"
@@ -269,6 +273,7 @@ public:
 		return rerouted_url.c_str();
 	}
 
+	// sends the response to client from proxy
 	void respond(char* msg){
 		int help = 1;
 		int sum = 0;
@@ -276,10 +281,10 @@ public:
 			help = send(connected_sock, &(msg[sum]), sizeof(msg), 0);
 			sum += help;
 		}
-		//fprintf(stderr, "text_message: %s\n ", msg);
 	}
+
+	// Forwards nontext content to client from proxy
 	void forward_nontext(char* buffer, int size){
-			//strncpy(forward_buffer, buffer, size);
 			int left_to_send = size;
 			int sent = 0;
 			int send_index = 0;
@@ -292,6 +297,9 @@ public:
 	}
 };
 
+
+
+// External class for communication between proxy and server
 class external_side
 {
 public:
@@ -320,6 +328,7 @@ public:
    		}
     	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 	}
+
 	void init_socket(){
 		//Define the socket type etc.
 		memset(&hints, 0, sizeof hints);
@@ -361,8 +370,9 @@ public:
 	void terminate_connection(){
     	close(sock);
 	}
+
+	// Sends the request to server (with keep-alive replaced)
  	int send_request(std::string *request){
-		//Replace the connection request in the HTTP message with closed.
 		std::string send_request = parser->replace_connection_to_closed(*request);
 		int msg_length = send_request.length();
 
@@ -375,6 +385,7 @@ public:
 		return send(sock, send_request.c_str(), msg_length, 0);
 	}
 
+	// receives until \r\n\r\n has been received
 	int receive_header(){
 		int received = 0;
 		while(std::string(buffer).find("\r\n\r\n") == -1){
@@ -391,6 +402,7 @@ public:
 		return recv(sock, &buffer, MAXDATASIZE-1, 0);
 	}
 
+	// returns the received buffer
 	char* receive_text(int received_bytes){
 		//int msg_length = parser->get_content_length(buffer);
 		int buf_index = received_bytes;
@@ -399,44 +411,50 @@ public:
 			received_bytes = recv(sock, &(buffer[buf_index]), MAXDATASIZE-1, 0);
 			buf_index += received_bytes;
 		}
-
-	  // TODO fprintf(stderr,"\n\n Received buffer: %s\n",buffer);
 		return buffer;
 	}
 };
 
+
+
+// Proxy class for communication between client and sever
 class proxy
 {
 	public:
 	internal_side* internal;
 	external_side* external;
 	char* transfer_buffer;
+
 	proxy(){
 		internal = new internal_side();
 		external = new external_side();
 		transfer_buffer = new char[MAXDATASIZE];
 	}
+
 	void init(char* c_port){
 		internal->init_socket(c_port);
 	}
+
 	void run(){
 		// The listening process will remain in this call:
 		internal->probe_and_fork_connection();
 
 		// Processes with a connection will start here:
-		//std::string request = "GET /wireshark-labs/HTTP-wireshark-file1.html HTTP/1.1\\r\\Host: gaia.cs.umass.edu\\r\\nUser-Agent: Mozilla/5.0 (Windows NT 6.1; WOW64; rv:46.0) Gecko/20100101 Firefox/46.0\\r\\nAccept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8\\r\\nAccept-Language: en-US,en;q=0.5\\r\\nAccept-Encoding: gzip, deflate\\r\\nConnection: keep-alive\\r\\n\\r\\n";
 		std::string request = internal->receive_request();
+
 		// Check for bad URL request
 		std::string url = external->parser->get_url_info(request, "GET ");
 		std::transform(url.begin(), url.end(), url.begin(), ::tolower);
+
 		if(external->parser->inappropriate_content(url)){
 			request = internal->reroute_url();
 			internal->respond((char*)request.c_str());
-			// End connection to host
+
+			// terminate all conenctions
 			external->terminate_connection();
-			// Kill connected processes
 			internal->terminate_connection();
 		}
+
 		// Connects the external socket to host and sends the HTTP request
 		fprintf(stderr, "PID: %d, Request:\n %s\nEND\n",internal->pid_, request.c_str());
 		if(external->send_request(&request) == -1)
@@ -444,20 +462,19 @@ class proxy
 
 		// Check http header if text or image
 		int received_bytes = external->receive_header();
-		//fprintf(stderr, "PID: %d, Response:\n %s\nEND\n", external->buffer);
+
 		if(external->is_text()){
 			transfer_buffer = external->receive_text(received_bytes);
-			//fprintf(stderr, "PID: %d, Response:\n %s\nEND\n",internal->pid_, external->buffer);
 			std::string tmp = std::string(transfer_buffer);
 			std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::tolower);
+
 			if(external->parser->inappropriate_content(tmp)){
 				//inappropriate content, reroute to other website
-
 				transfer_buffer = (char*) internal->reroute_content();
 			}
+
 			internal->respond(transfer_buffer);
-		} else {
-			//Image
+		} else { //Image
 			forward_nontext(received_bytes);
 		}
 		// End connection to host
@@ -466,13 +483,12 @@ class proxy
 		internal->terminate_connection();
 	}
 
+	// Forwards nontext messages continuously
 	void forward_nontext(int received_bytes){
 		int received = 0;
 		internal->forward_nontext(external->buffer, received_bytes);
-		//int length = external->parser->get_content_length(transfer_buffer);
 
 		while((received = external->receive_image()) > 0){	//Header already received
-			//length -= received;
 			fprintf(stderr, "received: %d\n", received);
 			internal->forward_nontext(external->buffer, received);
 		}
