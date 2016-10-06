@@ -24,9 +24,11 @@
 class HTTP_parser
 {
 public:
-	// Search a header for a key-value. Returns the key value if there is any.
-	// If a the header is not found a null string is returned.
-	std::string replace_content(std::string input, std::string find, std::string replace_string){
+	// Search the input string for string find. The first value that is found
+	// will be replaced by replace_string and the new string returned.
+	// If it's not found the process is exited.
+	std::string replace_content(std::string input, std::string find,
+																std::string replace_string){
 		std::string return_string;
 
 		int find_index = input.find(find);
@@ -36,7 +38,7 @@ public:
 		if(first_part == find.size()-1 || second_part == -1)
 			//Bad request
 			exit(1);
-		//TODO OBS
+
 		std::string start = input.substr(0,first_part);
 		std::string end = input.substr(second_part);
 
@@ -44,6 +46,9 @@ public:
 		return return_string;
 	}
 
+	// Searches input string and removes the characters from string "find" to
+	// \r\n including \r\n, that is the rest of that line. The new string without
+	// that line is returned. If the string is not found the process exites.
 	std::string remove_content(std::string input, std::string find){
 		std::string return_string;
 
@@ -54,7 +59,7 @@ public:
 		if(first_part == find.size()-1 || second_part == -1)
 			//Bad request
 			exit(1);
-		//TODO OBS
+
 		std::string start = input.substr(0,first_part);
 		std::string end = input.substr(second_part+2);
 
@@ -63,7 +68,7 @@ public:
 	}
 
 	// Searches the string request for the string find_string and returns the
-	// string after find_string which ends with \r\n.
+	// string after find_string which ends with \r\n. Returns the URL as string.
 	std::string get_url_info(std::string request, std::string find_string){
 		std::string URL;
 		int url_index;
@@ -77,8 +82,8 @@ public:
 
 	// Returns true if text, false if image
 	bool is_text(std::string message){
-		//fprintf(stderr, "%s/n", message.c_str());
 		std::string str = "Content-Type: ";
+
 		int start_index = message.find(str) + str.length();
 		int end_index = message.find("\r\n", start_index);
 
@@ -315,7 +320,7 @@ public:
 				send_index += sent;
 			}
 	}
-};
+}; //End of class internal_side
 
 
 // External class for communication between proxy and server
@@ -405,36 +410,40 @@ public:
 		return send(sock, send_request.c_str(), msg_length, 0);
 	}
 
-	// receives until \r\n\r\n has been received
+	// Receives until \r\n\r\n has been received. Returns the length of the
+	// message received.
 	int receive_header(){
 		int received = 0;
-		while(std::string(buffer).find("\r\n\r\n") == -1){
+
+		while(std::string(buffer).find("\r\n\r\n") == -1)
 				received += recv(sock, &(buffer[received]), MAXDATASIZE-1, 0);
-		}
+
 		return received;
   }
 
+	//Forwards to Parser's is_text
   bool is_text(){
 		return parser->is_text(std::string(buffer));
 	}
 
+	// Uses the recv() function once. The received data gets placed in buffer and
+	// returns the number of received bytes.
 	int receive_image(){
 		return recv(sock, &buffer, MAXDATASIZE-1, 0);
 	}
 
 	// returns the received buffer
 	char* receive_text(int received_bytes){
-		//int msg_length = parser->get_content_length(buffer);
 		int buf_index = received_bytes;
-		//int bytes_received=1;
+
 		while(received_bytes > 0){
 			received_bytes = recv(sock, &(buffer[buf_index]), MAXDATASIZE-1, 0);
 			buf_index += received_bytes;
 		}
-		//fprintf(stderr, "received:\n %s\nEND\n", buffer);
+
 		return buffer;
 	}
-};
+}; // End of class external_side
 
 
 
@@ -452,17 +461,19 @@ class proxy
 		transfer_buffer = new char[MAXDATASIZE];
 	}
 
+	//Inits the internal_side instance with the specified port.
 	void init(char* c_port){
 		internal->init_socket(c_port);
 	}
 
+	// The function that describes the flow of the proxy.
 	void run(){
 		// The listening process will remain in this call:
 		internal->probe_and_fork_connection();
 
-		// Processes with a connection will start here:
+		// Processes with a request from browser will "start" here:
 		std::string request = internal->receive_request();
-				fprintf(stderr, "request:\n %s\nEND\n", request.c_str());
+
 		// Check for bad URL request
 		std::string url = external->parser->get_url_info(request, "GET ");
 		std::transform(url.begin(), url.end(), url.begin(), ::tolower);
@@ -482,7 +493,6 @@ class proxy
 
 		// Check http header if text or image
 		int received_bytes = external->receive_header();
-				fprintf(stderr, "receive:\n %s\nEND\n", external->buffer);
 
 		if(external->is_text()){
 			transfer_buffer = external->receive_text(received_bytes);
@@ -509,12 +519,10 @@ class proxy
 		int received = 0;
 		internal->forward_nontext(external->buffer, received_bytes);
 
-		while((received = external->receive_image()) > 0){	//Header already received
-			fprintf(stderr, "received: %d\n", received);
+		while((received = external->receive_image()) > 0)	//Header already received
 			internal->forward_nontext(external->buffer, received);
-		}
 	}
-};
+}; //End of class Proxy
 
 int main(int argc, char** argv)
 {
