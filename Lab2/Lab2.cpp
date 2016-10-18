@@ -168,7 +168,8 @@ public:
 	}
 
 	public:
-	/* Used to probe for a message on the specified cport. When a connection is made
+	/* Used to probe for a message on the specified cport. When a connection is
+	 made
 	 * the main process keeps probing while the forked process returns with the
 	 * handle to a connection in connected_sock. */
 	void probe_and_fork_connection(){
@@ -179,7 +180,8 @@ public:
 				perror("accept");
 				//continue; //TODO: reimplement
 			}
-			inet_ntop(their_addr.sa_family, get_IP_addr((struct sockaddr*) &their_addr), s, sizeof(s));
+			inet_ntop(their_addr.sa_family,
+				 get_IP_addr((struct sockaddr*) &their_addr), s, sizeof(s));
 			pid_ = fork();
 			if(!pid_){
 				//Close listening socket for the processes with a connection
@@ -263,7 +265,7 @@ public:
 
 	// returns the http request for bad content
 	const char* reroute_content(){
-		std::string url = "http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error2.html";
+		std::string url ="http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error2.html";
 		std::string rerouted_url = "HTTP/1.1 301 Moved Permanently \r\n"
 												"Location: " + url + " \r\n"
 												"Content-Type: text/html \r\n"
@@ -274,7 +276,8 @@ public:
 												"</head> \r\n"
 												"<body> \r\n"
 												"<h1>Moved</h1> \r\n"
-												"<p>This page has moved to <a href=" + url +">" + url + "</a>.</p> \r\n"
+												"<p>This page has moved to <a href=" + url +">" + url +
+												 "</a>.</p> \r\n"
 												"</body> \r\n"
 												"</html> \r\n\r\n";
 		return rerouted_url.c_str();
@@ -282,7 +285,7 @@ public:
 
 	// returns the http request for bad url
 	const char* reroute_url(){
-		std::string url = "http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html";
+		std::string url ="http://www.ida.liu.se/~TDTS04/labs/2011/ass2/error1.html";
 		std::string rerouted_url = "HTTP/1.1 301 Moved Permanently \r\n"
 												"Location: " + url + " \r\n"
 												"Content-Type: text/html \r\n"
@@ -293,7 +296,8 @@ public:
 												"</head> \r\n"
 												"<body> \r\n"
 												"<h1>Moved</h1> \r\n"
-												"<p>This page has moved to <a href=" + url +">" + url + "</a>.</p> \r\n"
+												"<p>This page has moved to <a href=" + url +">"
+												 + url + "</a>.</p> \r\n"
 												"</body> \r\n"
 												"</html> \r\n\r\n";
 		return rerouted_url.c_str();
@@ -385,7 +389,8 @@ public:
 			exit(2);
 		}
 
-		inet_ntop(p->ai_family, get_in_addr((struct sockaddr*) p->ai_addr), s, sizeof(s));
+		inet_ntop(p->ai_family, get_in_addr((struct sockaddr*) p->ai_addr),
+		 s, sizeof(s));
 		fprintf(stderr, "client: connecting to %s\n", s);
 
 		freeaddrinfo(resp); // all done with this structure
@@ -397,7 +402,8 @@ public:
 
 	// Sends the request to server (with keep-alive replaced)
  	int send_request(std::string *request){
-		std::string send_request = parser->replace_content(*request, "Connection: ", "close");
+		std::string send_request =
+		parser->replace_content(*request, "Connection: ", "close");
 		send_request = parser->remove_content(send_request, "Accept-Encoding: ");
 		int msg_length = send_request.length();
 
