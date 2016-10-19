@@ -2,7 +2,7 @@ import javax.swing.*;
 import java.util.Arrays;
 
 public class RouterNode {
-  private boolean pReverse = false; 
+  private boolean pReverse = true;
   private int myID;
   private GuiTextArea myGUI;
   private RouterSimulator sim;
@@ -120,8 +120,22 @@ public class RouterNode {
 
   private void broadcastUpdate(){
     for (int i = 0; i<neighbours.length; i++){
+      int[] distanceVector = new int[RouterSimulator.NUM_NODES];
+      System.arraycopy(distanceTable[myID], 0, distanceVector, 0, RouterSimulator.NUM_NODES);
+
+      if(pReverse){
+        //For all nodes
+        for(int j=0; j<RouterSimulator.NUM_NODES; j++){
+          // If we route via another node
+          // AND we're sending to node we're routing through
+          if((route[j] != j) && (route[j] == neighbours[i])){
+            //tell routing node our direct path to the destination node is INF.
+            distanceVector[j] = RouterSimulator.INFINITY;
+          }
+        }
+      }
       RouterPacket packet =
-          new RouterPacket(myID, neighbours[i], distanceTable[myID]);
+          new RouterPacket(myID, neighbours[i], distanceVector);
       sendUpdate(packet);
     }
   }
