@@ -1,12 +1,15 @@
 import javax.swing.*;
+import java.util.Arrays;
 
 public class RouterNode {
+  private boolean pReverse = false; 
   private int myID;
   private GuiTextArea myGUI;
   private RouterSimulator sim;
   private int[] costs = new int[RouterSimulator.NUM_NODES];
   private int[][] distanceTable =
         new int[RouterSimulator.NUM_NODES][RouterSimulator.NUM_NODES];
+  private int[] route = new int[RouterSimulator.NUM_NODES];
 
   private int[] neighbours;
   //--------------------------------------------------
@@ -17,9 +20,10 @@ public class RouterNode {
 
     System.arraycopy(costs, 0, this.costs, 0, RouterSimulator.NUM_NODES);
 
-
-    //Calculate who's this nodes neighbours
+    Arrays.fill(route, RouterSimulator.INFINITY);
+    //Calculate this node's neighbours and init route array.
     calcNeighbours();
+    initRoute();
 
     //Initialize distance table
     for(int i = 0; i< RouterSimulator.NUM_NODES; i++)
@@ -27,6 +31,7 @@ public class RouterNode {
         distanceTable[i][j] = RouterSimulator.INFINITY;
     distanceTable[ID] = costs;
     printDistanceTable();
+
     //Send distance table to all neighbours
     broadcastUpdate();
   }
@@ -45,43 +50,50 @@ public class RouterNode {
     System.arraycopy(distanceTable[myID], 0,
           myNewDistances, 0, distanceTable[myID].length);
 
-          String line = "";
-          for(int j = 0; j< RouterSimulator.NUM_NODES; j++){
-          line += "\t" + myPreviousDistances[j];
-
-          }
-          myGUI.println(line);
-
-          line = "";
-          for(int j = 0; j< RouterSimulator.NUM_NODES; j++){
-          line += "\t" + myNewDistances[j];
-
-          }
-          myGUI.println(line);
-    if(!isEqualArrays(myPreviousDistances, myNewDistances)){
+    //If a change has occured, broadcast it
+    if(!isEqualArrays(myPreviousDistances, myNewDistances))
       broadcastUpdate();
-      myGUI.println("The distances are not equal!!");
-    }
-
   }
 
   private void updateDistances(){
     int cheapestCost;
     int pathCost;
     for(int i=0; i < RouterSimulator.NUM_NODES; i++){
-      //No need to check the cost to ourself
-      cheapestCost = distanceTable[myID][i];
-      if(myID == i)
-        continue;
 
+      //Set the default cheapest cost to what we know from our
+      //distance table (before this update).
+      cheapestCost = costs[i];
+      if(isNeighbour(i))
+        route[i] = i;
+
+      //No need to check the cost to ourself
+      if(myID == i){
+        route[i] = myID;
+        continue;
+      }
+
+      //Iterate through all neighbours and compare their DV table to
+      //find the cheapest path.
       for(int j=0; j<neighbours.length; j++){
         pathCost = costs[neighbours[j]] + distanceTable[neighbours[j]][i];
-        if(pathCost < cheapestCost)
+        if(pathCost < cheapestCost){
           cheapestCost = pathCost;
+          route[i] = neighbours[j];
+        }
       }
+
       distanceTable[myID][i] = cheapestCost;
     }
   }
+
+  private boolean isNeighbour(int ID){
+    for(int i = 0; i < neighbours.length; i++){
+      if(neighbours[i] == ID)
+        return true;
+    }
+    return false;
+  }
+  //Initiates an array of neighbours.
 
   private void calcNeighbours(){
     int[] neighboursTemp = new int[RouterSimulator.NUM_NODES];
@@ -92,6 +104,14 @@ public class RouterNode {
 
     neighbours = new int[neighIndex];
     System.arraycopy(neighboursTemp, 0, neighbours, 0, neighIndex);
+  }
+
+  //Initiates the route array. Must be done after calcNeighbours()!
+  private void initRoute(){
+    //Set route array to what's known.
+    for(int i=0; i<neighbours.length; i++){
+      route[neighbours[i]] = neighbours[i];
+    }
   }
   //--------------------------------------------------
   private void sendUpdate(RouterPacket pkt) {
@@ -122,11 +142,27 @@ public class RouterNode {
       }
       myGUI.println(line);
     }
-
+    printRoute();
   }
 
+  private void printRoute(){
+    myGUI.println("\nRoute array:");
+
+    String line = "";
+    for(int i = 0; i< RouterSimulator.NUM_NODES; i++)
+      line += "\t" + route[i];
+
+    myGUI.println(line);
+  }
   //--------------------------------------------------
   public void updateLinkCost(int dest, int newcost) {
+    myGUI.println("Cost change! Node: " + dest);
+    myGUI.println("Previous cost: " + costs[dest]);
+    myGUI.println("New cost: " + newcost);
+    costs[dest] = newcost;
+
+    updateDistances();
+    broadcastUpdate();
   }
 
   private boolean isEqualArrays(int[] arr1, int[] arr2){
